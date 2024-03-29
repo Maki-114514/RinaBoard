@@ -70,7 +70,7 @@ uint16_t RemotePort2;
 
 uint8_t dataCmd;
 uint8_t dataLen;
-uint8_t dataBuf[55];
+uint8_t dataBuf[100];
 uint8_t bufSize = sizeof(dataBuf) / sizeof(dataBuf[0]);
 
 //任务调用相关
