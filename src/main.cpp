@@ -1,13 +1,15 @@
 #include <Arduino.h>
 
 //LED驱动库
-#include <Adafruit_GFX.h>
 #include <FastLED_NeoMatrix.h>
 #include <FastLED.h>
 
 //SD卡
 #include <SD.h>
 #include <SPI.h>
+
+//eeprom断电存储
+#include "EEPROM.h"
 
 //UDP通讯和通讯格式解析库
 #include <WiFi.h>
@@ -24,7 +26,6 @@
 #define LEDC_CHANNEL 0 //定时器通道
 #define LEDC_TIMER_BIT 8 //定时器位宽
 #define LEDC_TIMER_FREQ 30000 //定时器频率
-#define LEDC_MAXDUTY 255
 
 //超时定义
 #define TIMEOUT 1800
@@ -70,7 +71,7 @@ uint16_t RemotePort2;
 
 uint8_t dataCmd;
 uint8_t dataLen;
-uint8_t dataBuf[100];
+uint8_t dataBuf[60];
 uint8_t bufSize = sizeof(dataBuf) / sizeof(dataBuf[0]);
 
 //任务调用相关
@@ -88,24 +89,23 @@ SystemState mode = ExpressionMode;
 bool isConnected = false;
 //——————————————————————————————————————————————————————————————————————— 灯阵驱动相关 ———————————————————————————————————————————————————————————————————————————————————————————————
 // 灯珠地址构造矩阵
-const uint16_t led_address[MATRIX_HEIGHT][MATRIX_WIDTH]
-        PROGMEM = {
-                {271, 271, 38,  39, 70, 71, 102, 103, 134, 135, 166, 167, 198, 199, 230, 231, 271, 271},
-                {271, 10,  37,  40, 69, 72, 101, 104, 133, 136, 165, 168, 197, 200, 229, 232, 259, 271},
-                {9,   11,  36,  41, 68, 73, 100, 105, 132, 137, 164, 169, 196, 201, 228, 233, 258, 260},
-                {8,   12,  35,  42, 67, 74, 99,  106, 131, 138, 163, 170, 195, 202, 227, 234, 257, 261},
-                {7,   13,  34,  43, 66, 75, 98,  107, 130, 139, 162, 171, 194, 203, 226, 235, 256, 262},
-                {6,   14,  33,  44, 65, 76, 97,  108, 129, 140, 161, 172, 193, 204, 225, 236, 255, 263},
-                {5,   15,  32,  45, 64, 77, 96,  109, 128, 141, 160, 173, 192, 205, 224, 237, 254, 264},
-                {4,   16,  31,  46, 63, 78, 95,  110, 127, 142, 159, 174, 191, 206, 223, 238, 253, 265},
-                {3,   17,  30,  47, 62, 79, 94,  111, 126, 143, 158, 175, 190, 207, 222, 239, 252, 266},
-                {2,   18,  29,  48, 61, 80, 93,  112, 125, 144, 157, 176, 189, 208, 221, 240, 251, 267},
-                {1,   19,  28,  49, 60, 81, 92,  113, 124, 145, 156, 177, 188, 209, 220, 241, 250, 268},
-                {0,   20,  27,  50, 59, 82, 91,  114, 123, 146, 155, 178, 187, 210, 219, 242, 249, 269},
-                {271, 21,  26,  51, 58, 83, 90,  115, 122, 147, 154, 179, 186, 211, 218, 243, 248, 271},
-                {271, 22,  25,  52, 57, 84, 89,  116, 121, 148, 153, 180, 185, 212, 217, 244, 247, 271},
-                {271, 23,  24,  53, 56, 85, 88,  117, 120, 149, 152, 181, 184, 213, 216, 245, 246, 271},
-                {271, 271, 271, 54, 55, 86, 87,  118, 119, 150, 151, 182, 183, 214, 215, 271, 271, 271}};
+const uint16_t led_address[MATRIX_HEIGHT][MATRIX_WIDTH] PROGMEM = {
+        {271, 271, 38,  39, 70, 71, 102, 103, 134, 135, 166, 167, 198, 199, 230, 231, 271, 271},
+        {271, 10,  37,  40, 69, 72, 101, 104, 133, 136, 165, 168, 197, 200, 229, 232, 259, 271},
+        {9,   11,  36,  41, 68, 73, 100, 105, 132, 137, 164, 169, 196, 201, 228, 233, 258, 260},
+        {8,   12,  35,  42, 67, 74, 99,  106, 131, 138, 163, 170, 195, 202, 227, 234, 257, 261},
+        {7,   13,  34,  43, 66, 75, 98,  107, 130, 139, 162, 171, 194, 203, 226, 235, 256, 262},
+        {6,   14,  33,  44, 65, 76, 97,  108, 129, 140, 161, 172, 193, 204, 225, 236, 255, 263},
+        {5,   15,  32,  45, 64, 77, 96,  109, 128, 141, 160, 173, 192, 205, 224, 237, 254, 264},
+        {4,   16,  31,  46, 63, 78, 95,  110, 127, 142, 159, 174, 191, 206, 223, 238, 253, 265},
+        {3,   17,  30,  47, 62, 79, 94,  111, 126, 143, 158, 175, 190, 207, 222, 239, 252, 266},
+        {2,   18,  29,  48, 61, 80, 93,  112, 125, 144, 157, 176, 189, 208, 221, 240, 251, 267},
+        {1,   19,  28,  49, 60, 81, 92,  113, 124, 145, 156, 177, 188, 209, 220, 241, 250, 268},
+        {0,   20,  27,  50, 59, 82, 91,  114, 123, 146, 155, 178, 187, 210, 219, 242, 249, 269},
+        {271, 21,  26,  51, 58, 83, 90,  115, 122, 147, 154, 179, 186, 211, 218, 243, 248, 271},
+        {271, 22,  25,  52, 57, 84, 89,  116, 121, 148, 153, 180, 185, 212, 217, 244, 247, 271},
+        {271, 23,  24,  53, 56, 85, 88,  117, 120, 149, 152, 181, 184, 213, 216, 245, 246, 271},
+        {271, 271, 271, 54, 55, 86, 87,  118, 119, 150, 151, 182, 183, 214, 215, 271, 271, 271}};
 
 /**
  * @brief   用于自定义地址映射给LED矩阵，其中输入参数x和y都是以0开始，正好对应二位数组的index从0开始
@@ -186,7 +186,6 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             Serial.printf("Board brightness is saved to eeprom\r\n");
 
 
-
             break;
         case BITMAP:
             for (int i = 0; i < 48; i++)
@@ -205,20 +204,21 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case LIGHTSTATE:
             lightIsOn = data[0];
-            if(lightIsOn){
+            if (lightIsOn)
+            {
                 ledcWrite(LEDC_CHANNEL, lightBrightness);
-            } else{
+            } else
+            {
                 ledcWrite(LEDC_CHANNEL, 0);
             }
             break;
         case LIGHTBRIGHTNESS:
             lightBrightness = data[0];
-            if(lightIsOn) ledcWrite(LEDC_CHANNEL, lightBrightness);
+            if (lightIsOn) ledcWrite(LEDC_CHANNEL, lightBrightness);
             break;
         case LIGHTBRIGHTNESSOVER:
             //当亮度停止改变时，将亮度存储在eeprom里
             Serial.printf("Light brightness is saved to eeprom\r\n");
-
 
 
             break;
@@ -346,7 +346,8 @@ void Task_OKToConnect(void *pt)
             {
                 //如果接收到ASK，则说明通讯顺利，更新lastTime
                 lastTime = millis();
-                if(!isConnected){
+                if (!isConnected)
+                {
                     isConnected = true;
                     Serial.println("Connect");
                 }
@@ -359,12 +360,15 @@ void Task_OKToConnect(void *pt)
             }
         }
 
-        if(millis() - lastTime > TIMEOUT){
-            if(isConnected){//如果之前处于连接状态，此时未连接，则更新连接状态为未连接
+        if (millis() - lastTime > TIMEOUT)
+        {
+            if (isConnected)
+            {//如果之前处于连接状态，此时未连接，则更新连接状态为未连接
                 isConnected = false;
                 Serial.println("Disconnect");
                 //断开连接后如果原先是视频模式，需要切换回表情模式
-                if(mode == VideoMode){
+                if (mode == VideoMode)
+                {
                     mode = ExpressionMode;
                     Serial.println("Mode is changed to ExpressionMode from VideoMode");
                 }
@@ -390,7 +394,8 @@ void Task_UdpInteract(void *pt)
             dataLen = udp.read();
 
             //清空缓存区
-            for (int i = 0; i < bufSize; i++){
+            for (int i = 0; i < bufSize; i++)
+            {
                 dataBuf[i] = 0;
             }
             udp.read(dataBuf, dataLen);
@@ -497,13 +502,16 @@ void LEDmatrixInit()
     // 灯板初始化结束
 }
 
-void LEDCInit(){
+void LEDCInit()
+{
     // 建立LEDC通道
     ledcSetup(LEDC_CHANNEL, LEDC_TIMER_FREQ, LEDC_TIMER_BIT);
     ledcAttachPin(LED_PIN, LEDC_CHANNEL);//绑定LEDC引脚
-    if(lightIsOn){
+    if (lightIsOn)
+    {
         ledcWrite(LEDC_CHANNEL, lightBrightness);
-    }else{
+    } else
+    {
         ledcWrite(LEDC_CHANNEL, 0);
     }
 }
