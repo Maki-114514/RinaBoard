@@ -9,7 +9,7 @@
 #include <SPI.h>
 
 //eeprom断电存储
-#include "EEPROM.h"
+#include "EEPROMSAVE.h"
 
 //UDP通讯和通讯格式解析库
 #include <WiFi.h>
@@ -171,20 +171,20 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             ESP.restart();
         case COLOR:
             color = (data[1] << 16) | (data[2] << 8) | data[3];
-//            Serial.printf("%hX, %hX, %hX, %hX\r\n", data[0], data[1], data[2], data[3]);
-            Serial.printf("Color is changed to %d\n", color);
+            writeColor(color);//保存在eeprom中
+//            USBSerial.printf("Color is changed to %d\n", color);
             showImagin();
             break;
         case BOARDBRIGHTNESS:
             boardBrightness = data[0];
-            Serial.printf("Board brightness is changed to %d\r\n", boardBrightness);
+//            USBSerial.printf("Board brightness is changed to %d\r\n", boardBrightness);
             matrix->setBrightness(boardBrightness);
             showImagin();
             break;
         case BOARDBRIGHTNESSOVER:
             //当亮度停止改变，则将当前亮度存储在eeprom里
-            Serial.printf("Board brightness is saved to eeprom\r\n");
-
+//            USBSerial.printf("Board brightness is saved to eeprom\r\n");
+            writeBoardBrightness(boardBrightness);
 
             break;
         case BITMAP:
@@ -192,7 +192,7 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 bitmap[i] = data[i];
             }
-            Serial.println("Bitmap is changed");
+//            USBSerial.println("Bitmap is changed");
             showImagin();
             break;
         case SAVEBITMAP: //保存bitmap时会告知当前表情名称
@@ -211,6 +211,7 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 ledcWrite(LEDC_CHANNEL, 0);
             }
+            writeLightState(lightIsOn);
             break;
         case LIGHTBRIGHTNESS:
             lightBrightness = data[0];
@@ -218,8 +219,8 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case LIGHTBRIGHTNESSOVER:
             //当亮度停止改变时，将亮度存储在eeprom里
-            Serial.printf("Light brightness is saved to eeprom\r\n");
-
+//            USBSerial.printf("Light brightness is saved to eeprom\r\n");
+            writeLightBrightness(lightBrightness);
 
             break;
         case DEVICENAME:
@@ -228,7 +229,7 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 deviceName[i] = (char) data[i];
             }
-            Serial.println("Device name is saved as " + deviceName);
+            USBSerial.println("Device name is saved as " + deviceName);
             break;
         case WIFISSID:
             ssid = "";
@@ -236,7 +237,7 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 ssid[i] = (char) data[i];
             }
-            Serial.println("Wifi ssid is saved as " + ssid);
+            USBSerial.println("Wifi ssid is saved as " + ssid);
             break;
         case WIFIPASSWORD:
             password = "";
@@ -244,22 +245,22 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 password[i] = (char) data[i];
             }
-            Serial.println("Wifi password is saved as " + password);
+            USBSerial.println("Wifi password is saved as " + password);
             break;
         case SYSTEMSTATE:
             switch (data[0])
             {
                 case EXPRESSIONMODE:
                     mode = ExpressionMode;
-                    Serial.println("System state is changed to ExpressionMode");
+                    USBSerial.println("System state is changed to ExpressionMode");
                     break;
                 case VIDEOMODE:
                     mode = VideoMode;
-                    Serial.println("System state is changed to VedioMode");
+                    USBSerial.println("System state is changed to VedioMode");
                     break;
                 case RECOGNITIONMODE:
                     mode = RecognitionMode;
-                    Serial.println("System state is changed to RecognitionMode");
+                    USBSerial.println("System state is changed to RecognitionMode");
                     break;
             }
             break;
@@ -349,14 +350,14 @@ void Task_OKToConnect(void *pt)
                 if (!isConnected)
                 {
                     isConnected = true;
-                    Serial.println("Connect");
+                    USBSerial.println("Connect");
                 }
 
-//                Serial.println("Receive the ask");
+//                USBSerial.println("Receive the ask");
                 udp2.beginPacket(RemoteIP2, RemotePort2); //准备发送数据
                 udp2.print("Ok to Link");
                 udp2.endPacket();            //发送数据
-//                Serial.println("Respond the ask");
+//                USBSerial.println("Respond the ask");
             }
         }
 
@@ -365,12 +366,12 @@ void Task_OKToConnect(void *pt)
             if (isConnected)
             {//如果之前处于连接状态，此时未连接，则更新连接状态为未连接
                 isConnected = false;
-                Serial.println("Disconnect");
+                USBSerial.println("Disconnect");
                 //断开连接后如果原先是视频模式，需要切换回表情模式
                 if (mode == VideoMode)
                 {
                     mode = ExpressionMode;
-                    Serial.println("Mode is changed to ExpressionMode from VideoMode");
+                    USBSerial.println("Mode is changed to ExpressionMode from VideoMode");
                 }
             }
         }
@@ -401,7 +402,7 @@ void Task_UdpInteract(void *pt)
             udp.read(dataBuf, dataLen);
             /*for (int i = 0; i < dataLen; ++i)
             {
-                Serial.printf("Receive data 0x%02X\r\n", dataBuf[i]);
+                USBSerial.printf("Receive data 0x%02X\r\n", dataBuf[i]);
             }*/
             //判断读还是写
             switch (dataCmd & 0b10000000)
@@ -426,7 +427,10 @@ void Task_UdpInteract(void *pt)
  * */
 void valueInit()
 {
-
+    color = readColor();
+    boardBrightness = readBoardBrightness();
+    lightIsOn = readLightstate();
+    lightBrightness = readLightBrightness();
 }
 
 /**
@@ -444,9 +448,9 @@ void wifiUDPInit()
     WiFi.softAP(ssid, password);    // 创建WiFi接入点
     IPAddress ip = WiFi.softAPIP(); // 获取AP的IP地址
 
-    Serial.println();
-    Serial.print("AP IP address: ");
-    Serial.println(ip);
+    USBSerial.println();
+    USBSerial.print("AP IP address: ");
+    USBSerial.println(ip);
 
     //启动udp通讯协议
     udp.begin(LocalPort);
@@ -480,7 +484,7 @@ void SDInit()
     spi.begin(12, 13, 11, 10);
     if (!SD.begin(10, spi))
     {
-        Serial.println("存储卡挂载失败");
+        USBSerial.println("存储卡挂载失败");
         return;
     }
     // SD卡初始化结束
@@ -520,14 +524,15 @@ void LEDCInit()
 
 void setup()
 {
-    Serial.begin(115200);
+    USBSerial.begin(115200);
+    delay(1000);
 
+    EEPROMInit();
     valueInit();
     LEDmatrixInit();
     wifiUDPInit();
     SDInit();
     LEDCInit();
-
 }
 
 
