@@ -74,7 +74,7 @@ uint8_t dataLen;
 uint8_t dataBuf[60];
 uint8_t bufSize = sizeof(dataBuf) / sizeof(dataBuf[0]);
 
-//任务调用相关
+//任务调用句柄
 TaskHandle_t UdpInteract_taskHandle;
 TaskHandle_t OkToConnect_taskHandle;
 
@@ -236,14 +236,17 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case DEVICENAME:
             deviceName = convertBytesToString(data, len);
+            writeDeviceName(&deviceName);
             USBSerial.println("Device name is saved as " + deviceName);
             break;
         case WIFISSID:
             ssid = convertBytesToString(data, len);
+            writeWifiSSID(&ssid);
             USBSerial.println("Wifi ssid is saved as " + ssid);
             break;
         case WIFIPASSWORD:
             password = convertBytesToString(data, len);
+            writeWifiPassword(&password);
             USBSerial.println("Wifi password is saved as " + password);
             break;
         case SYSTEMSTATE:
@@ -251,15 +254,15 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 case EXPRESSIONMODE:
                     mode = ExpressionMode;
-                    USBSerial.println("System state is changed to ExpressionMode");
+//                    USBSerial.println("System state is changed to ExpressionMode");
                     break;
                 case VIDEOMODE:
                     mode = VideoMode;
-                    USBSerial.println("System state is changed to VedioMode");
+//                    USBSerial.println("System state is changed to VedioMode");
                     break;
                 case RECOGNITIONMODE:
                     mode = RecognitionMode;
-                    USBSerial.println("System state is changed to RecognitionMode");
+//                    USBSerial.println("System state is changed to RecognitionMode");
                     break;
             }
             break;
@@ -426,6 +429,8 @@ void Task_UdpInteract(void *pt)
  * */
 void valueInit()
 {
+    EEPROMInit();
+
     color = readColor();
     boardBrightness = readBoardBrightness();
     lightIsOn = readLightstate();
@@ -529,11 +534,11 @@ void setup()
     USBSerial.begin(115200);
     delay(1000);
 
-    EEPROMInit();
+
     valueInit();
+    SDInit();
     LEDmatrixInit();
     wifiUDPInit();
-    SDInit();
     LEDCInit();
 }
 

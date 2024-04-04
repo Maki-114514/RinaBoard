@@ -26,8 +26,8 @@ void writeColor(uint32_t color);
 void writeBoardBrightness(uint8_t brightness);
 void writeLightState(uint8_t lightIsOn);
 void writeLightBrightness(uint8_t brightness);
-void writeDeviceName(String deviceName);
-void writeWifiSSID(String ssid);
-void writeWifiPassword(String password);
+void writeDeviceName(String *deviceName);
+void writeWifiSSID(String *ssid);
+void writeWifiPassword(String *password);
 
 #endif //EEPROMSAVE_H

@@ -142,35 +142,35 @@ void writeLightBrightness(uint8_t brightness)
     vTaskDelay(1);
 }
 
-void writeDeviceName(String deviceName)
+void writeDeviceName(String *deviceName)
 {
     if(EEPROM.read(DEVICENAME_ADDR) == 0)
     {
         EEPROM.write(DEVICENAME_ADDR, 1);
     }
-    EEPROM.writeString(DEVICENAME_ADDR + 1, deviceName);
+    EEPROM.writeString(DEVICENAME_ADDR + 1, *deviceName);
     EEPROM.commit();
     vTaskDelay(1);
 }
 
-void writeWifiSSID(String ssid)
+void writeWifiSSID(String *ssid)
 {
     if(EEPROM.read(WIFISSID_ADDR) == 0)
     {
         EEPROM.write(WIFISSID_ADDR, 1);
     }
-    EEPROM.writeString(WIFISSID_ADDR + 1, ssid);
+    EEPROM.writeString(WIFISSID_ADDR + 1, *ssid);
     EEPROM.commit();
     vTaskDelay(1);
 }
 
-void writeWifiPassword(String password)
+void writeWifiPassword(String *password)
 {
     if(EEPROM.read(WIFIPASSWORD_ADDR) == 0)
     {
         EEPROM.write(WIFIPASSWORD_ADDR, 1);
     }
-    EEPROM.writeString(WIFIPASSWORD_ADDR + 1, password);
+    EEPROM.writeString(WIFIPASSWORD_ADDR + 1, *password);
     EEPROM.commit();
     vTaskDelay(1);
 }
