@@ -1,7 +1,6 @@
 #ifndef EEPROMSAVE_H
 #define EEPROMSAVE_H
 
-
 #include <EEPROM.h>
 
 #define COLOR_ADDR 0x00
