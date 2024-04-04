@@ -133,7 +133,7 @@ void showImagin()
 }
 //——————————————————————————————————————————————————————————————————————— 灯阵驱动相关结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
-//——————————————————————————————————————————————————————————————————————— 数据发送&回应 ———————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
 /**
  * @brief 发送数据包
  * @param data:数据包
@@ -146,15 +146,26 @@ void SendPackage(const uint8_t *data, uint8_t len)
     udp.endPacket();            //发送数据
 }
 
-void SendString(const String *str, uint8_t len)
+void SendString(const String *str)
 {
     udp.beginPacket(RemoteIP, RemotePort); //准备发送数据
     udp.println(*str);
     udp.endPacket();            //发送数据
 }
+//——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
+//————————————————————————————————————————————————————————————————————————— 数据包转String ——————————————————————————————————————————————————————————————————————————————————————————————————
 
-//——————————————————————————————————————————————————————————————————————— 数据发送&回应结束 ———————————————————————————————————————————————————————————————————————————————————————————————
-
+String convertBytesToString(const uint8_t *data, uint8_t len)
+{
+    String result;
+    // 将字节流数据包中的每个字节转换成字符，并添加到字符串中
+    for (size_t i = 0; i < len; ++i)
+    {
+        result += (char) data[i];
+    }
+    return result;
+}
+//—————————————————————————————————————————————————————————————————————————— 数据包转String结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
 //——————————————————————————————————————————————————————————————————————— UDP通讯收发 ———————————————————————————————————————————————————————————————————————————————————————————————
 /**
@@ -224,27 +235,15 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
 
             break;
         case DEVICENAME:
-            deviceName = "";
-            for (int i = 0; i < len; ++i)
-            {
-                deviceName[i] = (char) data[i];
-            }
+            deviceName = convertBytesToString(data, len);
             USBSerial.println("Device name is saved as " + deviceName);
             break;
         case WIFISSID:
-            ssid = "";
-            for (int i = 0; i < len; ++i)
-            {
-                ssid[i] = (char) data[i];
-            }
+            ssid = convertBytesToString(data, len);
             USBSerial.println("Wifi ssid is saved as " + ssid);
             break;
         case WIFIPASSWORD:
-            password = "";
-            for (int i = 0; i < len; ++i)
-            {
-                password[i] = (char) data[i];
-            }
+            password = convertBytesToString(data, len);
             USBSerial.println("Wifi password is saved as " + password);
             break;
         case SYSTEMSTATE:
@@ -305,13 +304,13 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             SendPackage(converter.uintValue, 4);
             break;
         case DEVICENAME:
-            SendString(&deviceName, sizeof(deviceName));
+            SendString(&deviceName);
             break;
         case DEVICETYPE:
-            SendString(&deviceType, sizeof(deviceType));
+            SendString(&deviceType);
             break;
         case WIFISSID:
-            SendString(&ssid, sizeof(ssid));
+            SendString(&ssid);
             break;
         case SYSTEMSTATE:
             uint8_t package[1];
@@ -431,6 +430,9 @@ void valueInit()
     boardBrightness = readBoardBrightness();
     lightIsOn = readLightstate();
     lightBrightness = readLightBrightness();
+    deviceName = readDeviceName();
+    ssid = readWifiSSID();
+    password = readWifiPassword();
 }
 
 /**

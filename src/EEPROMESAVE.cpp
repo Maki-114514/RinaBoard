@@ -66,17 +66,35 @@ uint8_t readLightBrightness()
 
 String readDeviceName()
 {
-    return defaultDeviceName;
+    if (EEPROM.read(DEVICENAME_ADDR) != 0)
+    {
+        return EEPROM.readString(DEVICENAME_ADDR + 1);
+    } else
+    {
+        return defaultDeviceName;
+    }
 }
 
 String readWifiSSID()
 {
-    return defaultSSID;
+    if (EEPROM.read(WIFISSID_ADDR) != 0)
+    {
+        return EEPROM.readString(WIFISSID_ADDR + 1);
+    } else
+    {
+        return defaultSSID;
+    }
 }
 
 String readWifiPassword()
 {
-    return defaultPassword;
+    if (EEPROM.read(WIFIPASSWORD_ADDR) != 0)
+    {
+        return EEPROM.readString(WIFIPASSWORD_ADDR + 1);
+    } else
+    {
+        return defaultPassword;
+    }
 }
 
 //———————————————————————————————————————————————————————— Write —————————————————————————————————————————————————————————————————
@@ -126,15 +144,33 @@ void writeLightBrightness(uint8_t brightness)
 
 void writeDeviceName(String deviceName)
 {
-
+    if(EEPROM.read(DEVICENAME_ADDR) == 0)
+    {
+        EEPROM.write(DEVICENAME_ADDR, 1);
+    }
+    EEPROM.writeString(DEVICENAME_ADDR + 1, deviceName);
+    EEPROM.commit();
+    vTaskDelay(1);
 }
 
 void writeWifiSSID(String ssid)
 {
-
+    if(EEPROM.read(WIFISSID_ADDR) == 0)
+    {
+        EEPROM.write(WIFISSID_ADDR, 1);
+    }
+    EEPROM.writeString(WIFISSID_ADDR + 1, ssid);
+    EEPROM.commit();
+    vTaskDelay(1);
 }
 
 void writeWifiPassword(String password)
 {
-
+    if(EEPROM.read(WIFIPASSWORD_ADDR) == 0)
+    {
+        EEPROM.write(WIFIPASSWORD_ADDR, 1);
+    }
+    EEPROM.writeString(WIFIPASSWORD_ADDR + 1, password);
+    EEPROM.commit();
+    vTaskDelay(1);
 }
