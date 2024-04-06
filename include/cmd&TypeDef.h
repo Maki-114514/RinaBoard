@@ -20,6 +20,8 @@
 #define BITMAP 0x06
 #define EXPRESSIONLIST 0x08
 #define SAVEBITMAP 0x0A //保存数据时会传一个字符串作为bitmap的名字
+#define LASTEXPRESSION 0x1A
+#define NEXTEXPRESSION 0x1C
 
 //灯条相关
 #define LIGHTSTATE 0x0C

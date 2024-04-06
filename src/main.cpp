@@ -5,8 +5,7 @@
 #include <FastLED.h>
 
 //SD卡
-#include <SD.h>
-#include <SPI.h>
+#include "SDUtils.h"
 
 //eeprom断电存储
 #include "EEPROMSAVE.h"
@@ -14,6 +13,9 @@
 //UDP通讯和通讯格式解析库
 #include <WiFi.h>
 #include "cmd&TypeDef.h"
+
+//是否开启USB串口调试
+#include "DEBUG.h"
 
 //璃奈板驱动宏定义
 #define BOARD_PIN 4
@@ -30,9 +32,8 @@
 //超时定义
 #define TIMEOUT 1800
 
-//文件读取相关
-SPIClass spi = SPIClass(HSPI);
-File myFile;
+//SD卡状态
+bool SDIsOn = false;
 
 //显示驱动相关
 uint8_t bitmap[48];
@@ -125,12 +126,13 @@ uint16_t myRemapFn(uint16_t x, uint16_t y)
 /**
  * @brief 更新表情显示
  * */
-void showImagin()
+void showImage()
 {
     matrix->clear();
     matrix->drawBitmap(0, 0, bitmap, 18, 16, FastLED_NeoMatrix::Color24to16(color));
     matrix->show();
 }
+
 //——————————————————————————————————————————————————————————————————————— 灯阵驱动相关结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
 //——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
@@ -183,18 +185,15 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
         case COLOR:
             color = (data[1] << 16) | (data[2] << 8) | data[3];
             writeColor(color);//保存在eeprom中
-//            USBSerial.printf("Color is changed to %d\n", color);
-            showImagin();
+            showImage();
             break;
         case BOARDBRIGHTNESS:
             boardBrightness = data[0];
-//            USBSerial.printf("Board brightness is changed to %d\r\n", boardBrightness);
             matrix->setBrightness(boardBrightness);
-            showImagin();
+            showImage();
             break;
         case BOARDBRIGHTNESSOVER:
             //当亮度停止改变，则将当前亮度存储在eeprom里
-//            USBSerial.printf("Board brightness is saved to eeprom\r\n");
             writeBoardBrightness(boardBrightness);
 
             break;
@@ -203,15 +202,18 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 bitmap[i] = data[i];
             }
-//            USBSerial.println("Bitmap is changed");
-            showImagin();
+            showImage();
             break;
         case SAVEBITMAP: //保存bitmap时会告知当前表情名称
-            char *bitmapName;
-            for (int i = 0; i < len; ++i)
-            {
-                bitmapName[i] = (char) (data[i]);
-            }
+            saveExpression(convertBytesToString(data, len), bitmap);
+            break;
+        case LASTEXPRESSION:
+            getLastExpression(bitmap);
+            showImage();
+            break;
+        case NEXTEXPRESSION:
+            getNextExpression(bitmap);
+            showImage();
             break;
         case LIGHTSTATE:
             lightIsOn = data[0];
@@ -230,39 +232,41 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case LIGHTBRIGHTNESSOVER:
             //当亮度停止改变时，将亮度存储在eeprom里
-//            USBSerial.printf("Light brightness is saved to eeprom\r\n");
             writeLightBrightness(lightBrightness);
 
             break;
         case DEVICENAME:
             deviceName = convertBytesToString(data, len);
             writeDeviceName(&deviceName);
+#ifdef DEBUG
             USBSerial.println("Device name is saved as " + deviceName);
+#endif
             break;
         case WIFISSID:
             ssid = convertBytesToString(data, len);
             writeWifiSSID(&ssid);
+#ifdef DEBUG
             USBSerial.println("Wifi ssid is saved as " + ssid);
+#endif
             break;
         case WIFIPASSWORD:
             password = convertBytesToString(data, len);
             writeWifiPassword(&password);
+#ifdef DEBUG
             USBSerial.println("Wifi password is saved as " + password);
+#endif
             break;
         case SYSTEMSTATE:
             switch (data[0])
             {
                 case EXPRESSIONMODE:
                     mode = ExpressionMode;
-//                    USBSerial.println("System state is changed to ExpressionMode");
                     break;
                 case VIDEOMODE:
                     mode = VideoMode;
-//                    USBSerial.println("System state is changed to VedioMode");
                     break;
                 case RECOGNITIONMODE:
                     mode = RecognitionMode;
-//                    USBSerial.println("System state is changed to RecognitionMode");
                     break;
             }
             break;
@@ -352,14 +356,14 @@ void Task_OKToConnect(void *pt)
                 if (!isConnected)
                 {
                     isConnected = true;
+#ifdef DEBUG
                     USBSerial.println("Connect");
+#endif
                 }
 
-//                USBSerial.println("Receive the ask");
                 udp2.beginPacket(RemoteIP2, RemotePort2); //准备发送数据
                 udp2.print("Ok to Link");
                 udp2.endPacket();            //发送数据
-//                USBSerial.println("Respond the ask");
             }
         }
 
@@ -368,12 +372,16 @@ void Task_OKToConnect(void *pt)
             if (isConnected)
             {//如果之前处于连接状态，此时未连接，则更新连接状态为未连接
                 isConnected = false;
+#ifdef DEBUG
                 USBSerial.println("Disconnect");
+#endif
                 //断开连接后如果原先是视频模式，需要切换回表情模式
                 if (mode == VideoMode)
                 {
                     mode = ExpressionMode;
+#ifdef DEBUG
                     USBSerial.println("Mode is changed to ExpressionMode from VideoMode");
+#endif
                 }
             }
         }
@@ -402,10 +410,7 @@ void Task_UdpInteract(void *pt)
                 dataBuf[i] = 0;
             }
             udp.read(dataBuf, dataLen);
-            /*for (int i = 0; i < dataLen; ++i)
-            {
-                USBSerial.printf("Receive data 0x%02X\r\n", dataBuf[i]);
-            }*/
+
             //判断读还是写
             switch (dataCmd & 0b10000000)
             {
@@ -454,11 +459,11 @@ void wifiUDPInit()
     WiFi.softAPConfig(LocalIP, Gateway, SubNet);
     WiFi.softAP(ssid, password);    // 创建WiFi接入点
     IPAddress ip = WiFi.softAPIP(); // 获取AP的IP地址
-
+#ifdef DEBUG
     USBSerial.println();
     USBSerial.print("AP IP address: ");
     USBSerial.println(ip);
-
+#endif
     //启动udp通讯协议
     udp.begin(LocalPort);
     udp2.begin(LocalPort2);
@@ -483,21 +488,6 @@ void wifiUDPDeInit()
 }
 
 /**
- * @brief: SD驱动初始化
- * */
-void SDInit()
-{
-    // SD卡初始化
-    spi.begin(12, 13, 11, 10);
-    if (!SD.begin(10, spi))
-    {
-        USBSerial.println("存储卡挂载失败");
-        return;
-    }
-    // SD卡初始化结束
-}
-
-/**
  * @brief: LED矩阵初始化
  * */
 void LEDmatrixInit()
@@ -509,7 +499,7 @@ void LEDmatrixInit()
     matrix->setBrightness(boardBrightness);
     matrix->setRemapFunction(myRemapFn);
 
-    showImagin();
+    showImage();
     // 灯板初始化结束
 }
 
@@ -531,15 +521,16 @@ void LEDCInit()
 
 void setup()
 {
+#ifdef DEBUG
     USBSerial.begin(115200);
-    delay(1000);
-
-
+    delay(3000);
+#endif
     valueInit();
+    wifiUDPInit();
     SDInit();
     LEDmatrixInit();
-    wifiUDPInit();
     LEDCInit();
+    startAnime(showImage, bitmap);
 }
 
 
