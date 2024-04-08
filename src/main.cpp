@@ -36,7 +36,8 @@
 #define EXPRESSION_PIN 36
 #define WRIELESSMODE_PIN 37
 
-//SD卡状态
+//电池电压采集定义
+#define BATTERY_PIN 3
 
 //显示驱动相关
 uint8_t bitmap[48];
@@ -54,7 +55,7 @@ uint8_t lightBrightness = 100;
 uint8_t lightIsOn = 1;
 
 //电量
-float electricity = 0.0f;
+float voltage = 0.0f;
 
 //WIFI通讯相关
 String ssid = "RinaBoard";
@@ -129,6 +130,7 @@ uint16_t myRemapFn(uint16_t x, uint16_t y)
 
 /**
  * @brief 更新表情显示
+ * @return none
  * */
 void showImage()
 {
@@ -139,11 +141,26 @@ void showImage()
 
 //——————————————————————————————————————————————————————————————————————— 灯阵驱动相关结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
+//——————————————————————————————————————————————————————————————————————— 电压采集 ———————————————————————————————————————————————————————————————————————————————————————————————
+
+/**
+ * @brief 获取电池电压值
+ * @return none
+ * */
+void updateBatteryVoltage()
+{
+    uint16_t adc_data = analogRead(BATTERY_PIN);
+    voltage =  (float)adc_data * 2 / 4095.0f * 3.3f + 0.1f;
+}
+
+//——————————————————————————————————————————————————————————————————————— 电压采集结束 ———————————————————————————————————————————————————————————————————————————————————————————————
+
 //——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
 /**
  * @brief 发送数据包
  * @param data:数据包
  * @param len:数据包长度
+ * @return none
  * */
 void SendPackage(const uint8_t *data, uint8_t len)
 {
@@ -152,6 +169,11 @@ void SendPackage(const uint8_t *data, uint8_t len)
     udp.endPacket();            //发送数据
 }
 
+/**
+ * @brief 发送字符串
+ * @param str:要发送的字符串的指针
+ * @return none
+ * */
 void SendString(const String *str)
 {
     udp.beginPacket(RemoteIP, RemotePort); //准备发送数据
@@ -160,7 +182,11 @@ void SendString(const String *str)
 }
 //——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
 //————————————————————————————————————————————————————————————————————————— 数据包转String ——————————————————————————————————————————————————————————————————————————————————————————————————
-
+/**
+ * @brief 将接收到的数据转换为字符串(UTF-8)
+ * @param data:数据包
+ * @param len:数据包长度
+ * */
 String convertBytesToString(const uint8_t *data, uint8_t len)
 {
     String result;
@@ -323,7 +349,7 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case ELECTRICITY:
             union FloatToArray converter;
-            converter.floatValue = electricity;
+            converter.floatValue = voltage;
             SendPackage(converter.uintValue, 4);
             break;
         case DEVICENAME:
@@ -341,6 +367,8 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             {
                 case ExpressionMode:
                     package[0] = EXPRESSIONMODE;
+                    break;
+                case VideoMode:
                     break;
                 case RecognitionMode:
                     package[0] = RECOGNITIONMODE;
@@ -529,11 +557,12 @@ void LEDCInit()
     }
 }
 
-void ButtonInit()
+void GPIOInit()
 {
     //表情切换按钮输入初始化
     pinMode(EXPRESSION_PIN, INPUT_PULLUP);
     pinMode(WRIELESSMODE_PIN, INPUT_PULLUP);
+    pinMode(BATTERY_PIN, INPUT);
 }
 //——————————————————————————————————————————————————————————————————————— 初始化结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -550,7 +579,11 @@ void setup()
     LEDmatrixInit();
     LEDCInit();
     startAnime(showImage, bitmap);
-    ButtonInit();
+    GPIOInit();
+#ifdef DEBUG
+    updateBatteryVoltage();
+    PORT.printf("The Battery voltage is %.2fV\r\n", voltage);
+#endif
 }
 
 
