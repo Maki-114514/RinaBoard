@@ -110,8 +110,23 @@ bool DoublyLinkedList::isEmpty() const
     return head == nullptr;
 }
 
-DoublyLinkedList::Node *DoublyLinkedList::getHead() const
+DoublyLinkedList::Node* DoublyLinkedList::getHead() const
 {
     return head; // 返回头节点指针
 }
 
+DoublyLinkedList::Node* DoublyLinkedList::findNode(const String& str) {
+    if (isEmpty()) {
+        return nullptr;
+    }
+
+    Node* currentNode = head;
+    do {
+        if (currentNode->data == str) {
+            return currentNode;
+        }
+        currentNode = currentNode->next;
+    } while (currentNode != head);
+
+    return nullptr; // 没有找到包含该字符串的节点
+}

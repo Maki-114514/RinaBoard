@@ -8,10 +8,11 @@
 #define LIGHTSTATE_ADDR 0x07
 #define LIGHTBRIGHTNESS_ADDR 0x09
 #define DEVICENAME_ADDR 0x0B
-#define WIFISSID_ADDR 0x34
-#define WIFIPASSWORD_ADDR 0x5D
+#define WIFISSID_ADDR 0x64
+#define WIFIPASSWORD_ADDR 0xD3
 
 void EEPROMInit();
+void clearEEPROM();
 
 uint32_t readColor();
 uint8_t readBoardBrightness();

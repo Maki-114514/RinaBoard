@@ -1,5 +1,5 @@
-#ifndef __CMD_TYPEDEF_H__
-#define __CMD_TYPEDEF_H__
+#ifndef CMD_TYPEDEF_H_
+#define CMD_TYPEDEF_H_
 
 //每次写入命令结束都需要回复一个RESPONSE告知安卓app已经收到数据
 
@@ -20,6 +20,8 @@
 #define BITMAP 0x06
 #define EXPRESSIONLIST 0x08
 #define SAVEBITMAP 0x0A //保存数据时会传一个字符串作为bitmap的名字
+#define DELETEBITMAP 0x0B //删除数据时会传一个字符串作为bitmap的名字
+#define CHANGEBITMAP 0x1B //app端发送一个字符串告诉璃奈板要切换到哪个表情
 #define LASTEXPRESSION 0x1A
 #define NEXTEXPRESSION 0x1C
 

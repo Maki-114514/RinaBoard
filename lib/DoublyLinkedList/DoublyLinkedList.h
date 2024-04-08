@@ -24,6 +24,7 @@ public:
     void clear();
     bool isEmpty() const;
     Node* getHead() const;
+    Node *findNode(const String &str);
 };
 
 #endif

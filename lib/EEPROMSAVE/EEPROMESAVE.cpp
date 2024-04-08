@@ -19,6 +19,16 @@ void EEPROMInit()
     EEPROM.begin(4096); //申请操作到地址4095（比如你只需要读写地址为100上的一个字节，该处也需输入参数101）
 }
 
+void clearEEPROM()
+{
+    for (int i = 0; i < EEPROM.length(); ++i)
+    {
+        EEPROM.write(i, 0); // 将每个字节写为零
+    }
+    EEPROM.commit();
+    vTaskDelay(5);
+}
+
 //———————————————————————————————————————————————————————— Read —————————————————————————————————————————————————————————————————
 uint32_t readColor()
 {
@@ -144,7 +154,7 @@ void writeLightBrightness(uint8_t brightness)
 
 void writeDeviceName(String *deviceName)
 {
-    if(EEPROM.read(DEVICENAME_ADDR) == 0)
+    if (EEPROM.read(DEVICENAME_ADDR) == 0)
     {
         EEPROM.write(DEVICENAME_ADDR, 1);
     }
@@ -155,7 +165,7 @@ void writeDeviceName(String *deviceName)
 
 void writeWifiSSID(String *ssid)
 {
-    if(EEPROM.read(WIFISSID_ADDR) == 0)
+    if (EEPROM.read(WIFISSID_ADDR) == 0)
     {
         EEPROM.write(WIFISSID_ADDR, 1);
     }
@@ -166,7 +176,7 @@ void writeWifiSSID(String *ssid)
 
 void writeWifiPassword(String *password)
 {
-    if(EEPROM.read(WIFIPASSWORD_ADDR) == 0)
+    if (EEPROM.read(WIFIPASSWORD_ADDR) == 0)
     {
         EEPROM.write(WIFIPASSWORD_ADDR, 1);
     }

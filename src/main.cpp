@@ -14,7 +14,7 @@
 #include <WiFi.h>
 #include "cmd&TypeDef.h"
 
-//是否开启USB串口调试
+//是否开启串口调试
 #include "DEBUG.h"
 
 //璃奈板驱动宏定义
@@ -32,8 +32,11 @@
 //超时定义
 #define TIMEOUT 1800
 
+//按钮引脚定义
+#define EXPRESSION_PIN 36
+#define WRIELESSMODE_PIN 37
+
 //SD卡状态
-bool SDIsOn = false;
 
 //显示驱动相关
 uint8_t bitmap[48];
@@ -44,6 +47,7 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, MATRIX_WIDTH, MATRIX_HEI
 //璃奈板亮度和颜色
 uint8_t boardBrightness = 100;
 uint32_t color = 0x00FF1493;
+String expreesionList = "";
 
 //灯条亮度和开关
 uint8_t lightBrightness = 100;
@@ -207,6 +211,16 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
         case SAVEBITMAP: //保存bitmap时会告知当前表情名称
             saveExpression(convertBytesToString(data, len), bitmap);
             break;
+        case DELETEBITMAP:
+            removeExpression(convertBytesToString(data, len));
+            break;
+        case CHANGEBITMAP:
+            getExpreesion(convertBytesToString(data, len), bitmap);
+#ifdef DEBUG
+            PORT.println("Change the bitmap");
+#endif
+            showImage();
+            break;
         case LASTEXPRESSION:
             getLastExpression(bitmap);
             showImage();
@@ -239,21 +253,21 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             deviceName = convertBytesToString(data, len);
             writeDeviceName(&deviceName);
 #ifdef DEBUG
-            USBSerial.println("Device name is saved as " + deviceName);
+            PORT.println("Device name is saved as " + deviceName);
 #endif
             break;
         case WIFISSID:
             ssid = convertBytesToString(data, len);
             writeWifiSSID(&ssid);
 #ifdef DEBUG
-            USBSerial.println("Wifi ssid is saved as " + ssid);
+            PORT.println("Wifi ssid is saved as " + ssid);
 #endif
             break;
         case WIFIPASSWORD:
             password = convertBytesToString(data, len);
             writeWifiPassword(&password);
 #ifdef DEBUG
-            USBSerial.println("Wifi password is saved as " + password);
+            PORT.println("Wifi password is saved as " + password);
 #endif
             break;
         case SYSTEMSTATE:
@@ -298,6 +312,8 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             SendPackage(bitmap, 48);
             break;
         case EXPRESSIONLIST:
+            expreesionList = getStringFromList();
+            SendString(&expreesionList);
             break;
         case LIGHTSTATE:
             SendPackage(&lightIsOn, 1);
@@ -357,7 +373,7 @@ void Task_OKToConnect(void *pt)
                 {
                     isConnected = true;
 #ifdef DEBUG
-                    USBSerial.println("Connect");
+                    PORT.println("Connect");
 #endif
                 }
 
@@ -373,14 +389,14 @@ void Task_OKToConnect(void *pt)
             {//如果之前处于连接状态，此时未连接，则更新连接状态为未连接
                 isConnected = false;
 #ifdef DEBUG
-                USBSerial.println("Disconnect");
+                PORT.println("Disconnect");
 #endif
                 //断开连接后如果原先是视频模式，需要切换回表情模式
                 if (mode == VideoMode)
                 {
                     mode = ExpressionMode;
 #ifdef DEBUG
-                    USBSerial.println("Mode is changed to ExpressionMode from VideoMode");
+                    PORT.println("Mode is changed to ExpressionMode from VideoMode");
 #endif
                 }
             }
@@ -402,33 +418,43 @@ void Task_UdpInteract(void *pt)
             RemotePort = udp.remotePort();
 
             dataCmd = udp.read();
-            dataLen = udp.read();
-
-            //清空缓存区
-            for (int i = 0; i < bufSize; i++)
+            if ((dataCmd & 0b10000000) == SETCMD | (dataCmd & 0b10000000) == GETCMD)
             {
-                dataBuf[i] = 0;
-            }
-            udp.read(dataBuf, dataLen);
+                dataLen = udp.read();
 
-            //判断读还是写
-            switch (dataCmd & 0b10000000)
-            {
-                case SETCMD:
-                    SetValue(dataCmd, dataBuf, dataLen);
-                    break;
-                case GETCMD:
-                    GetValue(dataCmd, dataBuf, dataLen);
-                    break;
+#ifdef DEBUG
+                PORT.printf("Get head data: %X\r\n", dataCmd);
+#endif
+
+                //清空缓存区
+                for (int i = 0; i < bufSize; i++)
+                {
+                    dataBuf[i] = 0;
+                }
+                udp.read(dataBuf, dataLen);
+
+                //判断读还是写
+                switch (dataCmd & 0b10000000)
+                {
+                    case SETCMD:
+                        SetValue(dataCmd, dataBuf, dataLen);
+                        break;
+                    case GETCMD:
+                        GetValue(dataCmd, dataBuf, dataLen);
+                        break;
+                }
             }
         }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
     vTaskDelete(NULL);
 }
+
+
+
 //———————————————————————————————————————————————————————————————————— 任务进程结束 ——————————————————————————————————————————————————————————————————
 
-//——————————————————————————————————————————————————————————————————————— 初始化&去初始化 ———————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————— 初始化 ———————————————————————————————————————————————————————————————————————————————————————————————
 /**
  * @brief: 变量初始化，从eeprom中读取而后存储在变量中
  * */
@@ -460,31 +486,17 @@ void wifiUDPInit()
     WiFi.softAP(ssid, password);    // 创建WiFi接入点
     IPAddress ip = WiFi.softAPIP(); // 获取AP的IP地址
 #ifdef DEBUG
-    USBSerial.println();
-    USBSerial.print("AP IP address: ");
-    USBSerial.println(ip);
+    PORT.println();
+    PORT.print("AP IP address: ");
+    PORT.println(ip);
 #endif
     //启动udp通讯协议
     udp.begin(LocalPort);
     udp2.begin(LocalPort2);
     //wifi&udp通讯初始化结束
 
-    xTaskCreatePinnedToCore(Task_UdpInteract, "udp interact", 1024 * 20, NULL, 2, &UdpInteract_taskHandle, 0);
-    xTaskCreatePinnedToCore(Task_OKToConnect, "Ok to connect", 1024 * 14, NULL, 1, &OkToConnect_taskHandle, 0);
-}
-
-/**
- * @brief: WIFI UDP关闭
- * */
-void wifiUDPDeInit()
-{
-    //删除udp相关任务
-    vTaskDelete(UdpInteract_taskHandle);
-    vTaskDelete(OkToConnect_taskHandle);
-    WiFi.disconnect(true);//断开wifi
-    //停止udp
-    udp.stop();
-    udp2.stop();
+    xTaskCreatePinnedToCore(Task_UdpInteract, "udp interact", 1024 * 23, NULL, 4, &UdpInteract_taskHandle, 1);
+    xTaskCreatePinnedToCore(Task_OKToConnect, "Ok to connect", 1024 * 16, NULL, 3, &OkToConnect_taskHandle, 1);
 }
 
 /**
@@ -516,13 +528,20 @@ void LEDCInit()
         ledcWrite(LEDC_CHANNEL, 0);
     }
 }
-//——————————————————————————————————————————————————————————————————————— 初始化&去初始化结束 ———————————————————————————————————————————————————————————————————————————————————————————————
+
+void ButtonInit()
+{
+    //表情切换按钮输入初始化
+    pinMode(EXPRESSION_PIN, INPUT_PULLUP);
+    pinMode(WRIELESSMODE_PIN, INPUT_PULLUP);
+}
+//——————————————————————————————————————————————————————————————————————— 初始化结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
 
 void setup()
 {
 #ifdef DEBUG
-    USBSerial.begin(115200);
+    PORT.begin(115200);
     delay(3000);
 #endif
     valueInit();
@@ -531,10 +550,50 @@ void setup()
     LEDmatrixInit();
     LEDCInit();
     startAnime(showImage, bitmap);
+    ButtonInit();
 }
 
 
 void loop()
 {
+    // 检测按钮按下
+    if (digitalRead(EXPRESSION_PIN) == LOW)
+    {
+        unsigned long startTime = millis(); // 记录按下开始时间
 
+        // 等待按钮释放
+        while (digitalRead(EXPRESSION_PIN) == LOW)
+        {
+            // 等待按钮释放
+        }
+
+        unsigned long pressDuration = millis() - startTime; // 计算按下持续时间
+        if (pressDuration > 50 && pressDuration < 600)
+        {
+            getNextExpression(bitmap);
+            showImage();
+        } else if (pressDuration >= 600)
+        {
+            getLastExpression(bitmap);
+            showImage();
+        }
+    }
+    // 检测按钮按下
+    if (digitalRead(WRIELESSMODE_PIN) == LOW)
+    {
+        unsigned long startTime = millis(); // 记录按下开始时间
+
+        // 等待按钮释放
+        while (digitalRead(WRIELESSMODE_PIN) == LOW)
+        {
+            // 等待按钮释放
+        }
+
+        unsigned long pressDuration = millis() - startTime; // 计算按下持续时间
+        if (pressDuration > 6000)
+        {
+            clearEEPROM();
+            ESP.restart();
+        }
+    }
 }

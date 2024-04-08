@@ -17,10 +17,10 @@ bool SDInit()
     spi.begin(12, 13, 11, 10);
     if (!SD.begin(10, spi))
     {
-        if (USBSerial.available())
+        if (PORT.available())
         {
 #ifdef DEBUG
-            USBSerial.println("存储卡挂载失败");
+            PORT.println("存储卡挂载失败");
 #endif
         }
         return false;
@@ -38,7 +38,7 @@ void getExpressionListFromSD()
     if (!root)
     {
 #ifdef DEBUG
-        USBSerial.println("Failed to open root directory");
+        PORT.println("Failed to open root directory");
 #endif
         return;
     }
@@ -50,12 +50,55 @@ void getExpressionListFromSD()
             String filename = "/" + String(entry.name());
             expressionList.insert(filename);
 #ifdef DEBUG
-            USBSerial.printf("%s is inserted into expressionList\r\n", filename.c_str());
+            PORT.printf("%s is inserted into expressionList\r\n", filename.c_str());
 #endif
         }
         entry.close();
     }
     root.close(); // 关闭根目录
+}
+
+String getStringFromList()
+{
+    String str = "";
+    DoublyLinkedList::Node *fileNode = expressionList.getHead();
+    if(fileNode)
+    {
+        str += getNameFromPath(fileNode->data);
+        fileNode = fileNode->next;
+        while (fileNode != expressionList.getHead())
+        {
+            str += "|";
+            str += getNameFromPath(fileNode->data);
+            fileNode = fileNode->next;
+        }
+    }
+#ifdef DEBUG
+    PORT.println("The String is :" + str);
+#endif
+    return str;
+}
+
+String getNameFromPath(const String &path)
+{
+    // 查找最后一个斜杠的位置
+    int lastSlashIndex = path.lastIndexOf('/');
+    if (lastSlashIndex == -1)
+    {
+        // 没有斜杠，直接返回原字符串
+        return path;
+    }
+
+    // 查找最后一个点的位置（文件扩展名的起始位置）
+    int lastDotIndex = path.lastIndexOf('.');
+    if (lastDotIndex == -1 || lastDotIndex < lastSlashIndex)
+    {
+        // 没有点，或者点在斜杠之前，直接返回文件名
+        return path.substring(lastSlashIndex + 1);
+    }
+
+    // 截取文件名部分（不包括斜杠和扩展名）
+    return path.substring(lastSlashIndex + 1, lastDotIndex);
 }
 
 /**
@@ -102,7 +145,7 @@ void startAnime(void (*showImage)(), uint8_t *bitmap)
     if (expressionList.getHead() != nullptr)
     {
 #ifdef DEBUG
-        USBSerial.println("There is a expression file");
+        PORT.println("There is a expression file");
 #endif
         expression = expressionList.getHead();
         String bitmapname = expression->data;
@@ -110,7 +153,7 @@ void startAnime(void (*showImage)(), uint8_t *bitmap)
         if (myFile)
         {
 #ifdef DEBUG
-            USBSerial.println("Show the expression named " + bitmapname);
+            PORT.println("Show the expression named " + bitmapname);
 #endif
             myFile.read(bitmap, 48);
             showImage();
@@ -118,7 +161,7 @@ void startAnime(void (*showImage)(), uint8_t *bitmap)
         myFile.close();
     }
 #ifdef DEBUG
-    USBSerial.println("Start anime is over");
+    PORT.println("Start anime is over");
 #endif
 }
 
@@ -141,18 +184,51 @@ void saveExpression(const String &name, uint8_t *bitmap)
     {
         expressionList.insert(filename);
 #ifdef DEBUG
-        USBSerial.printf("%s is inserted into expressionList\r\n", filename.c_str());
+        PORT.printf("%s is inserted into expressionList\r\n", filename.c_str());
 #endif
+    }
+}
+
+void removeExpression(const String &name)
+{
+    String filename = "/" + name + ".bin";
+    if (SD.remove(filename))
+    {
+        if (expressionList.search(filename))
+        {
+            expressionList.remove(filename);
+#ifdef DEBUG
+            PORT.printf("%s is removed from expressionList\r\n", filename.c_str());
+#endif
+        }
+    }
+}
+
+void getExpreesion(const String &name, uint8_t *bitmap)
+{
+    String filename = "/" + name + ".bin";
+    if (expressionList.findNode(filename) != nullptr)
+    {
+#ifdef DEBUG
+        PORT.println("Change to bitmap named " + filename);
+#endif
+        expression = expressionList.findNode(filename);
+        myFile = SD.open(expression->data, FILE_READ);
+        if (myFile)
+        {
+            myFile.read(bitmap, 48);
+        }
+        myFile.close();
     }
 }
 
 void getLastExpression(uint8_t *bitmap)
 {
-    if(expression->prev != nullptr)
+    if (expression->prev != nullptr)
     {
         expression = expression->prev;
         myFile = SD.open(expression->data, FILE_READ);
-        if(myFile)
+        if (myFile)
         {
             myFile.read(bitmap, 48);
         }
@@ -161,11 +237,11 @@ void getLastExpression(uint8_t *bitmap)
 
 void getNextExpression(uint8_t *bitmap)
 {
-    if(expression->next != nullptr)
+    if (expression->next != nullptr)
     {
         expression = expression->next;
         myFile = SD.open(expression->data, FILE_READ);
-        if(myFile)
+        if (myFile)
         {
             myFile.read(bitmap, 48);
         }
