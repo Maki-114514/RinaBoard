@@ -177,7 +177,7 @@ void SendPackage(const uint8_t *data, uint8_t len)
 void SendString(const String *str)
 {
     udp.beginPacket(RemoteIP, RemotePort); //准备发送数据
-    udp.println(*str);
+    udp.print(*str);
     udp.endPacket();            //发送数据
 }
 //——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
