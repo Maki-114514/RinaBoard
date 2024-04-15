@@ -21,5 +21,10 @@ void removeExpression(const String &name);
 void getExpreesion(const String &name, uint8_t* bitmap);
 void getLastExpression(uint8_t *bitmap);
 void getNextExpression(uint8_t *bitmap);
+void clearStartBitmap();
+void appendBitmap(const uint8_t *img);
+void appendBitmapOnBoard(const String &name);
+void appendMicroSeconds(const uint8_t* ms);
+void appendSeconds(uint8_t s);
 
 #endif //SDSAVE_H

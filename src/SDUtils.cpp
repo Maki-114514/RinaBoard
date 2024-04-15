@@ -7,6 +7,7 @@ File myFile;
 DoublyLinkedList expressionList;
 DoublyLinkedList::Node *expression;
 const String startExpreesionName = "start.bin";
+const String startFilePath = "/" + startExpreesionName;
 
 /**
  * @brief: SD驱动初始化
@@ -62,7 +63,7 @@ String getStringFromList()
 {
     String str = "";
     DoublyLinkedList::Node *fileNode = expressionList.getHead();
-    if(fileNode)
+    if (fileNode)
     {
         str += getNameFromPath(fileNode->data);
         fileNode = fileNode->next;
@@ -141,28 +142,6 @@ void startAnime(void (*showImage)(), uint8_t *bitmap)
         }
     }
     myFile.close();
-
-    if (expressionList.getHead() != nullptr)
-    {
-#ifdef DEBUG
-        PORT.println("There is a expression file");
-#endif
-        expression = expressionList.getHead();
-        String bitmapname = expression->data;
-        myFile = SD.open(bitmapname, FILE_READ);
-        if (myFile)
-        {
-#ifdef DEBUG
-            PORT.println("Show the expression named " + bitmapname);
-#endif
-            myFile.read(bitmap, 48);
-            showImage();
-        }
-        myFile.close();
-    }
-#ifdef DEBUG
-    PORT.println("Start anime is over");
-#endif
 }
 
 
@@ -224,6 +203,21 @@ void getExpreesion(const String &name, uint8_t *bitmap)
 
 void getLastExpression(uint8_t *bitmap)
 {
+    if (expression == nullptr)
+    {
+        if (expressionList.getHead() != nullptr)
+        {
+            expression = expressionList.getHead();
+            String bitmapname = expression->data;
+            myFile = SD.open(bitmapname, FILE_READ);
+            if (myFile)
+            {
+                myFile.read(bitmap, 48);
+            }
+            myFile.close();
+        }
+        return;
+    }
     if (expression->prev != nullptr)
     {
         expression = expression->prev;
@@ -232,11 +226,27 @@ void getLastExpression(uint8_t *bitmap)
         {
             myFile.read(bitmap, 48);
         }
+        myFile.close();
     }
 }
 
 void getNextExpression(uint8_t *bitmap)
 {
+    if (expression == nullptr)
+    {
+        if (expressionList.getHead() != nullptr)
+        {
+            expression = expressionList.getHead();
+            String bitmapname = expression->data;
+            myFile = SD.open(bitmapname, FILE_READ);
+            if (myFile)
+            {
+                myFile.read(bitmap, 48);
+            }
+            myFile.close();
+        }
+        return;
+    }
     if (expression->next != nullptr)
     {
         expression = expression->next;
@@ -245,5 +255,74 @@ void getNextExpression(uint8_t *bitmap)
         {
             myFile.read(bitmap, 48);
         }
+        myFile.close();
     }
+}
+
+void clearStartBitmap()
+{
+    SD.remove(startFilePath);
+    myFile = SD.open(startFilePath, FILE_WRITE);
+    myFile.close();
+}
+
+void appendBitmap(const uint8_t *img)
+{
+    myFile = SD.open(startFilePath, FILE_APPEND);
+#ifdef DEBUG
+    PORT.println("Append bitmap to start anime");
+#endif
+    if (myFile)
+    {
+        myFile.write(0x00);
+        myFile.write(img, 48);
+    }
+    myFile.close();
+}
+
+void appendBitmapOnBoard(const String &name)
+{
+    String filename = "/" + name + ".bin";
+    uint8_t bitmap[48];
+    myFile = SD.open(filename, FILE_READ);
+    if (myFile)
+    {
+#ifdef DEBUG
+        PORT.println("Append bitmap to start anime named " + filename);
+#endif
+        myFile.read(bitmap, 48);
+        myFile.close();
+        appendBitmap(bitmap);
+        return;
+    }
+    myFile.close();
+}
+
+void appendMicroSeconds(const uint8_t *ms)
+{
+    myFile = SD.open(startFilePath, FILE_APPEND);
+    if (myFile)
+    {
+        uint16_t data = (ms[0] << 8) | ms[1];
+#ifdef DEBUG
+        PORT.println("Append delay to start anime: " + (String)data + "ms");
+#endif
+        myFile.write(0x80);
+        myFile.write(ms, 2);
+    }
+    myFile.close();
+}
+
+void appendSeconds(uint8_t s)
+{
+    myFile = SD.open(startFilePath, FILE_APPEND);
+    if (myFile)
+    {
+#ifdef DEBUG
+        PORT.println("Append delay to start anime: " + (String)s + "s");
+#endif
+        myFile.write(0xC0);
+        myFile.write(s);
+    }
+    myFile.close();
 }

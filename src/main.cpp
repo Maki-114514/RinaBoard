@@ -56,6 +56,7 @@ uint8_t lightIsOn = 1;
 
 //电量
 float voltage = 0.0f;
+FloatToArray floatConvertor;
 
 //WIFI通讯相关
 String ssid = "RinaBoard";
@@ -150,7 +151,7 @@ void showImage()
 void updateBatteryVoltage()
 {
     uint16_t adc_data = analogRead(BATTERY_PIN);
-    voltage =  (float)adc_data * 2 / 4095.0f * 3.3f + 0.1f;
+    voltage = (float) adc_data * 2 / 4095.0f * 3.3f + 0.1f;
 }
 
 //——————————————————————————————————————————————————————————————————————— 电压采集结束 ———————————————————————————————————————————————————————————————————————————————————————————————
@@ -181,7 +182,7 @@ void SendString(const String *str)
     udp.endPacket();            //发送数据
 }
 //——————————————————————————————————————————————————————————————————————— 数据发送 ———————————————————————————————————————————————————————————————————————————————————————————————
-//————————————————————————————————————————————————————————————————————————— 数据包转String ——————————————————————————————————————————————————————————————————————————————————————————————————
+//————————————————————————————————————————————————————————————————————————— 数据包转换 ——————————————————————————————————————————————————————————————————————————————————————————————————
 /**
  * @brief 将接收到的数据转换为字符串(UTF-8)
  * @param data:数据包
@@ -225,7 +226,6 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
         case BOARDBRIGHTNESSOVER:
             //当亮度停止改变，则将当前亮度存储在eeprom里
             writeBoardBrightness(boardBrightness);
-
             break;
         case BITMAP:
             for (int i = 0; i < 48; i++)
@@ -310,6 +310,24 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
                     break;
             }
             break;
+        case CLEARSTART:
+            clearStartBitmap();
+#ifdef DEBUG
+            PORT.println("start change the start anime");
+#endif
+            break;
+        case APPENDBITMAP:
+            appendBitmap(data);
+            break;
+        case APPENDBITMAPONBOARD:
+            appendBitmapOnBoard(convertBytesToString(data, len));
+            break;
+        case APPENDMICROSECOND:
+            appendMicroSeconds(data);
+            break;
+        case APPENDSECOND:
+            appendSeconds(data[0]);
+            break;
     }
 }
 
@@ -326,7 +344,7 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
         case COLOR:
             uint8_t colorData[4];
             colorData[0] = (color >> 24) | 0xFF;
-            colorData[1] = (color >> 16) & 0xFF;//color是24位，高8位没有实际意义，不做处理，只发后24位
+            colorData[1] = (color >> 16) & 0xFF;//color是24位，高8位没有实际意义，不做处理，只对后24位进行处理
             colorData[2] = (color >> 8) & 0xFF;
             colorData[3] = color & 0xFF; // 低8位
             SendPackage(colorData, 4);
@@ -346,11 +364,6 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             break;
         case LIGHTBRIGHTNESS:
             SendPackage(&lightBrightness, 1);
-            break;
-        case ELECTRICITY:
-            union FloatToArray converter;
-            converter.floatValue = voltage;
-            SendPackage(converter.uintValue, 4);
             break;
         case DEVICENAME:
             SendString(&deviceName);
@@ -393,21 +406,29 @@ void Task_OKToConnect(void *pt)
             RemoteIP2 = udp2.remoteIP();
             RemotePort2 = udp2.remotePort();
 
-            if (udp2.read() == ASK)
+            switch (udp2.read())
             {
-                //如果接收到ASK，则说明通讯顺利，更新lastTime
-                lastTime = millis();
-                if (!isConnected)
-                {
-                    isConnected = true;
+                case ASK:
+                    //如果接收到ASK，则说明通讯顺利，更新lastTime
+                    lastTime = millis();
+                    if (!isConnected)
+                    {
+                        isConnected = true;
 #ifdef DEBUG
-                    PORT.println("Connect");
+                        PORT.println("Connect");
 #endif
-                }
-
-                udp2.beginPacket(RemoteIP2, RemotePort2); //准备发送数据
-                udp2.print("Ok to Link");
-                udp2.endPacket();            //发送数据
+                    }
+                    udp2.beginPacket(RemoteIP2, RemotePort2); //准备发送数据
+                    udp2.print("Ok to Link");
+                    udp2.endPacket();            //发送数据
+                    break;
+                case ELECTRICITY:
+                    lastTime = millis();
+                    floatConvertor.floatValue = voltage;
+                    udp2.beginPacket(RemoteIP2, RemotePort2); //准备发送数据
+                    udp2.write(floatConvertor.uintValue, 4);
+                    udp2.endPacket();            //发送数据
+                    break;
             }
         }
 
@@ -629,4 +650,6 @@ void loop()
             ESP.restart();
         }
     }
+    //更新电池电压
+    updateBatteryVoltage();
 }

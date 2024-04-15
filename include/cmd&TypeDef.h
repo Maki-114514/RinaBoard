@@ -45,6 +45,13 @@
 #define VIDEOMODE 0x01
 #define RECOGNITIONMODE 0x02
 
+//启动动画
+#define CLEARSTART 0x21
+#define APPENDBITMAP 0x22
+#define APPENDBITMAPONBOARD 0x23
+#define APPENDMICROSECOND 0x24
+#define APPENDSECOND 0x25
+
 union FloatToArray {
     float floatValue;
     uint8_t uintValue[4];
