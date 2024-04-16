@@ -84,6 +84,16 @@ uint8_t bufSize = sizeof(dataBuf) / sizeof(dataBuf[0]);
 //任务调用句柄
 TaskHandle_t UdpInteract_taskHandle;
 TaskHandle_t OkToConnect_taskHandle;
+TaskHandle_t Damage_taskHandle;
+
+//光害相关
+String damageWords = "";
+uint8_t damageLightIsOn = 0;
+int position = 18;
+
+void startDamage();
+
+void deleteDamage();
 
 //设备相关
 String deviceName = "璃奈板";
@@ -150,8 +160,12 @@ void showImage()
  * */
 void updateBatteryVoltage()
 {
-    uint16_t adc_data = analogRead(BATTERY_PIN);
-    voltage = (float) adc_data * 2 / 4095.0f * 3.3f + 0.1f;
+    uint16_t adc_data = 0;
+    for (int i = 0; i < 3; ++i)
+    {
+        adc_data += analogRead(BATTERY_PIN);
+    }
+    voltage = (float) adc_data / 3 * 2 / 4095.0f * 3.3f + 0.1f;
 }
 
 //——————————————————————————————————————————————————————————————————————— 电压采集结束 ———————————————————————————————————————————————————————————————————————————————————————————————
@@ -216,6 +230,7 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
         case COLOR:
             color = (data[1] << 16) | (data[2] << 8) | data[3];
             writeColor(color);//保存在eeprom中
+            matrix->setTextColor(FastLED_NeoMatrix::Color24to16(color));
             showImage();
             break;
         case BOARDBRIGHTNESS:
@@ -297,6 +312,10 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
 #endif
             break;
         case SYSTEMSTATE:
+            if ((mode == DamageMode) && (data[0] != DAMAGEMODE))
+            {
+                deleteDamage();
+            }
             switch (data[0])
             {
                 case EXPRESSIONMODE:
@@ -308,6 +327,29 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
                 case RECOGNITIONMODE:
                     mode = RecognitionMode;
                     break;
+                case DAMAGEMODE:
+                    if (mode != DamageMode)
+                    {
+                        mode = DamageMode;
+                        startDamage();
+                    }
+                    break;
+            }
+            break;
+        case DAMAGELIGHTSTATE:
+            if (mode == DamageMode)
+            {
+                damageLightIsOn = data[0];
+            }
+            break;
+        case DAMAGELWORDS:
+            if (mode == DamageMode)
+            {
+                damageWords = convertBytesToString(data, len);
+                position = 18;
+#ifdef DEBUG
+                PORT.println("Set damage words: " + damageWords);
+#endif
             }
             break;
         case CLEARSTART:
@@ -386,8 +428,18 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
                 case RecognitionMode:
                     package[0] = RECOGNITIONMODE;
                     break;
+                case DamageMode:
+                    package[0] = DAMAGEMODE;
+                    break;
             }
             SendPackage(package, 1);
+            break;
+        case DAMAGELIGHTSTATE:
+            SendPackage(&damageLightIsOn, 1);
+            break;
+        case DAMAGELWORDS:
+            SendString(&damageWords);
+            break;
     }
 }
 
@@ -499,11 +551,58 @@ void Task_UdpInteract(void *pt)
     vTaskDelete(NULL);
 }
 
+void Task_Damage(void *pt)
+{
+    int lightState = 0;
+    const uint8_t y = 3;
+    uint8_t count = 0;
+    position = 18;
+    while (1)
+    {
+        if (damageLightIsOn)
+        {
+            if (lightState == 0)
+            {
+                ledcWrite(LEDC_CHANNEL, lightBrightness);
+                lightState = 1;
+            } else
+            {
+                ledcWrite(LEDC_CHANNEL, 0);
+                lightState = 0;
+            }
+        } else if (lightIsOn)
+        {
+            ledcWrite(LEDC_CHANNEL, lightBrightness);
+        } else
+        {
+            ledcWrite(LEDC_CHANNEL, 0);
+        }
+        if(damageWords != ""){
+            if(count == 2){
+                if(position == 16 - damageWords.length() * 7){
+                    position = 18;
+                } else{
+                    position--;
+                }
+                matrix->setCursor(position, y);
+                matrix->clear();
+                matrix->setTextColor(FastLED_NeoMatrix::Color24to16(color));
+                matrix->print(damageWords);
+                matrix->show();
+                count = 0;
+            } else{
+                count++;
+            }
+        }
 
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    vTaskDelete(NULL);
+}
 
 //———————————————————————————————————————————————————————————————————— 任务进程结束 ——————————————————————————————————————————————————————————————————
 
-//——————————————————————————————————————————————————————————————————————— 初始化 ———————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————— 初始化&任务开关 ———————————————————————————————————————————————————————————————————————————————————————————————
 /**
  * @brief: 变量初始化，从eeprom中读取而后存储在变量中
  * */
@@ -585,6 +684,32 @@ void GPIOInit()
     pinMode(WRIELESSMODE_PIN, INPUT_PULLUP);
     pinMode(BATTERY_PIN, INPUT);
 }
+
+void startDamage()
+{
+    xTaskCreatePinnedToCore(Task_Damage, "Damage task", 1024 * 7, NULL, 1, &Damage_taskHandle, 0);
+#ifdef DEBUG
+    PORT.println("Start the damage task");
+#endif
+}
+
+void deleteDamage()
+{
+    vTaskDelete(Damage_taskHandle);
+#ifdef DEBUG
+    PORT.println("Delete the damage task");
+#endif
+    if (lightIsOn)
+    {
+        ledcWrite(LEDC_CHANNEL, lightBrightness);
+    } else
+    {
+        ledcWrite(LEDC_CHANNEL, 0);
+    }
+    damageLightIsOn = 0;
+    damageWords = "";
+    position = 18;
+}
 //——————————————————————————————————————————————————————————————————————— 初始化结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
 
@@ -652,4 +777,6 @@ void loop()
     }
     //更新电池电压
     updateBatteryVoltage();
+
+    vTaskDelay(pdMS_TO_TICKS(100));
 }

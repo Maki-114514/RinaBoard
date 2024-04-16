@@ -44,6 +44,11 @@
 #define EXPRESSIONMODE 0x00
 #define VIDEOMODE 0x01
 #define RECOGNITIONMODE 0x02
+#define DAMAGEMODE 0x03
+
+//光害模式的数据定义
+#define DAMAGELIGHTSTATE 0x26
+#define DAMAGELWORDS 0x27
 
 //启动动画
 #define CLEARSTART 0x21
@@ -60,7 +65,8 @@ union FloatToArray {
 typedef enum {
     ExpressionMode,
     VideoMode,
-    RecognitionMode
+    RecognitionMode,
+    DamageMode,
 }SystemState;
 
 #endif
