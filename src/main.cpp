@@ -92,6 +92,7 @@ uint8_t damageLightIsOn = 0;
 int position = 18;
 
 void startDamage();
+
 void deleteDamage();
 
 //设备相关
@@ -262,12 +263,18 @@ void SetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
             showImage();
             break;
         case LASTEXPRESSION:
-            getLastExpression(bitmap);
-            showImage();
+            if (mode == ExpressionMode)
+            {
+                getLastExpression(bitmap);
+                showImage();
+            }
             break;
         case NEXTEXPRESSION:
-            getNextExpression(bitmap);
-            showImage();
+            if (mode == ExpressionMode)
+            {
+                getNextExpression(bitmap);
+                showImage();
+            }
             break;
         case LIGHTSTATE:
             lightIsOn = data[0];
@@ -554,7 +561,6 @@ void Task_Damage(void *pt)
 {
     int lightState = 0;
     const uint8_t y = 3;
-    uint8_t count = 0;
     position = 18;
     while (1)
     {
@@ -576,22 +582,20 @@ void Task_Damage(void *pt)
         {
             ledcWrite(LEDC_CHANNEL, 0);
         }
-        if(damageWords != ""){
-            if(count == 2){
-                if(position == 16 - damageWords.length() * 7){
-                    position = 18;
-                } else{
-                    position--;
-                }
-                matrix->setCursor(position, y);
-                matrix->clear();
-                matrix->setTextColor(FastLED_NeoMatrix::Color24to16(color));
-                matrix->print(damageWords);
-                matrix->show();
-                count = 0;
-            } else{
-                count++;
+        if (damageWords != "")
+        {
+            if (position == 16 - damageWords.length() * 7)
+            {
+                position = 18;
+            } else
+            {
+                position--;
             }
+            matrix->setCursor(position, y);
+            matrix->clear();
+            matrix->setTextColor(FastLED_NeoMatrix::Color24to16(color));
+            matrix->print(damageWords);
+            matrix->show();
         }
 
         vTaskDelay(pdMS_TO_TICKS(50));
@@ -708,6 +712,7 @@ void deleteDamage()
     damageLightIsOn = 0;
     damageWords = "";
     position = 18;
+    showImage();
 }
 //——————————————————————————————————————————————————————————————————————— 初始化结束 ———————————————————————————————————————————————————————————————————————————————————————————————
 
