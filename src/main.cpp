@@ -92,7 +92,6 @@ uint8_t damageLightIsOn = 0;
 int position = 18;
 
 void startDamage();
-
 void deleteDamage();
 
 //设备相关

@@ -305,7 +305,7 @@ void appendMicroSeconds(const uint8_t *ms)
     {
         uint16_t data = (ms[0] << 8) | ms[1];
 #ifdef DEBUG
-        PORT.println("Append delay to start anime: " + (String)data + "ms");
+        PORT.println("Append delay to start anime: " + (String) data + "ms");
 #endif
         myFile.write(0x80);
         myFile.write(ms, 2);
@@ -319,7 +319,7 @@ void appendSeconds(uint8_t s)
     if (myFile)
     {
 #ifdef DEBUG
-        PORT.println("Append delay to start anime: " + (String)s + "s");
+        PORT.println("Append delay to start anime: " + (String) s + "s");
 #endif
         myFile.write(0xC0);
         myFile.write(s);
