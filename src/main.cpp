@@ -782,5 +782,5 @@ void loop()
     //更新电池电压
     updateBatteryVoltage();
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(20));
 }
