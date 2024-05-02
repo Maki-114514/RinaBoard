@@ -430,6 +430,7 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
                     package[0] = EXPRESSIONMODE;
                     break;
                 case VideoMode:
+                    package[0] = VIDEOMODE;
                     break;
                 case RecognitionMode:
                     package[0] = RECOGNITIONMODE;
@@ -498,14 +499,6 @@ void Task_OKToConnect(void *pt)
 #ifdef DEBUG
                 PORT.println("Disconnect");
 #endif
-                //断开连接后如果原先是视频模式，需要切换回表情模式
-                if (mode == VideoMode)
-                {
-                    mode = ExpressionMode;
-#ifdef DEBUG
-                    PORT.println("Mode is changed to ExpressionMode from VideoMode");
-#endif
-                }
             }
         }
         vTaskDelay(pdMS_TO_TICKS(100));
