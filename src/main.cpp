@@ -460,6 +460,7 @@ void GetValue(uint8_t cmd, const uint8_t *data, uint8_t len)
                     package[0] = EXPRESSIONMODE;
                     break;
                 case VideoMode:
+                    package[0] = VIDEOMODE;
                     break;
                 case RecognitionMode:
                     package[0] = RECOGNITIONMODE;
