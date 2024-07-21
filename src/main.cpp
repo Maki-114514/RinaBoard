@@ -1,5 +1,4 @@
 #include <Arduino.h>
-
 //LED驱动库
 #include <FastLED_NeoMatrix.h>
 #include <FastLED.h>
@@ -10,8 +9,10 @@
 //eeprom断电存储
 #include "EEPROMSAVE.h"
 
-//UDP通讯和通讯格式解析库
+//OTA,UDP通讯和通讯格式解析库
 #include <WiFi.h>
+#include <WebServer.h>
+#include <Update.h>
 #include "cmd&TypeDef.h"
 
 //是否开启串口调试
@@ -34,7 +35,7 @@
 
 //按钮引脚定义
 #define EXPRESSION_PIN 36
-#define WRIELESSMODE_PIN 37
+#define SETTING_PIN 37
 
 //电池电压采集定义
 #define BATTERY_PIN 3
@@ -59,8 +60,37 @@ float voltage = 0.0f;
 FloatToArray floatConvertor;
 
 //WIFI通讯相关
+const char *host = "esp32";
 String ssid = "RinaBoard";
 String password = "12345678";
+
+WebServer server(80);
+
+const char* updateIndex =
+        "<html>"
+        "<head>"
+        "<meta charset=\"UTF-8\">"
+        "<title>ESP32 OTA 更新</title>"
+        "<style>"
+        "body { font-family: Arial, sans-serif; text-align: center; }"
+        "h1 { color: #333; }"
+        "form { margin-top: 20px; }"
+        "input[type=file] { display: block; margin: 20px auto; }"
+        "input[type=submit] { margin-top: 20px; padding: 10px 20px; font-size: 18px; }"
+        "</style>"
+        "</head>"
+        "<body>"
+        "<h1>欢迎使用 ESP32 OTA 更新</h1>"
+        "<form method='POST' action='/update' enctype='multipart/form-data'>"
+        "<input type='file' name='update' accept='.bin'>"
+        "<input type='submit' value='上传固件'>"
+        "</form>"
+        "</body>"
+        "</html>";
+void handleRoot() {
+    server.sendHeader("Location", "/update");
+    server.send(302, "text/plain", "");
+}
 
 WiFiUDP udp;
 WiFiUDP udp2;
@@ -684,7 +714,7 @@ void GPIOInit()
 {
     //表情切换按钮输入初始化
     pinMode(EXPRESSION_PIN, INPUT_PULLUP);
-    pinMode(WRIELESSMODE_PIN, INPUT_PULLUP);
+    pinMode(SETTING_PIN, INPUT_PULLUP);
     pinMode(BATTERY_PIN, INPUT);
 }
 
@@ -723,13 +753,76 @@ void setup()
     PORT.begin(115200);
     delay(3000);
 #endif
+    GPIOInit();
+    if (digitalRead(SETTING_PIN) == LOW)//如果检测到开机时设置键按下，则进入OTA刷写模式
+    {
+        delay(30);
+        if (digitalRead(SETTING_PIN) == LOW)
+        {
+            //wifi&udp通讯初始化
+            WiFi.disconnect(true);
+
+            WiFi.mode(WIFI_AP); // 设置为AP模式
+
+            WiFi.softAPConfig(LocalIP, Gateway, SubNet);
+            WiFi.softAP(ssid, password);    // 创建WiFi接入点
+
+            // 设置服务器处理函数
+            server.on("/", HTTP_GET, handleRoot); // 根路由重定向到 OTA 页面
+
+            server.on("/update", HTTP_GET, []() {
+                server.sendHeader("Connection", "close");
+                server.send(200, "text/html", updateIndex);
+            });
+
+            server.on("/update", HTTP_POST, []() {
+                server.sendHeader("Connection", "close");
+
+                //动态显示结果
+                String message = Update.hasError() ? "更新失败" : "更新成功。重新启动…";
+                server.sendHeader("Content-Type", "text/html; charset=utf-8");
+                server.send(200, "text/html", "<span style='font-size: 24px;'>" + message + "</span>");
+
+
+                delay(1000);
+                ESP.restart();
+            }, []() {
+                HTTPUpload& upload = server.upload(); //用于处理上传的文件数据
+                if (upload.status == UPLOAD_FILE_START) {
+                    Serial.printf("Update: %s\n", upload.filename.c_str());
+                    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // 以最大可用大小开始
+                        Update.printError(Serial);
+                    }
+                } else if (upload.status == UPLOAD_FILE_WRITE) {
+                    // 将接收到的数据写入Update对象
+                    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                        Update.printError(Serial);
+                    }
+                } else if (upload.status == UPLOAD_FILE_END) {
+                    if (Update.end(true)) { // 设置大小为当前大小
+                        Serial.printf("Update Success: %u bytes\n", upload.totalSize);
+                    } else {
+                        Update.printError(Serial);
+                    }
+                }
+            });
+
+            server.begin();
+
+            while (1)
+            {
+                server.handleClient();
+                delay(600);
+            }
+        }
+    }
+
     valueInit();
     wifiUDPInit();
     SDInit();
     LEDmatrixInit();
     LEDCInit();
     startAnime(showImage, bitmap);
-    GPIOInit();
 #ifdef DEBUG
     updateBatteryVoltage();
     PORT.printf("The Battery voltage is %.2fV\r\n", voltage);
@@ -762,12 +855,12 @@ void loop()
         }
     }
     // 检测按钮按下
-    if (digitalRead(WRIELESSMODE_PIN) == LOW)
+    if (digitalRead(SETTING_PIN) == LOW)
     {
         unsigned long startTime = millis(); // 记录按下开始时间
 
         // 等待按钮释放
-        while (digitalRead(WRIELESSMODE_PIN) == LOW)
+        while (digitalRead(SETTING_PIN) == LOW)
         {
             // 等待按钮释放
         }
